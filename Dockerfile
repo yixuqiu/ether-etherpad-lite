@@ -3,16 +3,17 @@
 # https://github.com/ether/etherpad-lite
 #
 # Author: muxator
+ARG BUILD_ENV=git
 
-FROM node:alpine as adminBuild
-
+FROM node:alpine AS adminbuild
+RUN npm install -g pnpm@latest
 WORKDIR /opt/etherpad-lite
-COPY ./ ./
-RUN cd ./admin && npm install -g pnpm@9.0.4 && pnpm install && pnpm run build --outDir ./dist
-RUN cd ./ui && pnpm install && pnpm run build --outDir ./dist
+COPY . .
+RUN pnpm install
+RUN pnpm run build:ui
 
 
-FROM node:alpine as build
+FROM node:alpine AS build
 LABEL maintainer="Etherpad team, https://github.com/ether/etherpad-lite"
 
 # Set these arguments when building the image from behind a proxy
@@ -48,6 +49,14 @@ ARG ETHERPAD_PLUGINS=
 # EXAMPLE:
 #   ETHERPAD_LOCAL_PLUGINS="../ep_my_plugin ../ep_another_plugin"
 ARG ETHERPAD_LOCAL_PLUGINS=
+
+# github plugins to install while building the container. By default no plugins are
+# installed.
+# If given a value, it has to be a space-separated, quoted list of plugin names.
+#
+# EXAMPLE:
+#   ETHERPAD_GITHUB_PLUGINS="ether/ep_plugin"
+ARG ETHERPAD_GITHUB_PLUGINS=
 
 # Control whether abiword will be installed, enabling exports to DOC/PDF/ODT formats.
 # By default, it is not installed.
@@ -91,7 +100,7 @@ RUN mkdir -p "${EP_DIR}" && chown etherpad:etherpad "${EP_DIR}"
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199
 RUN  \
     mkdir -p /usr/share/man/man1 && \
-    npm install pnpm@9.0.4 -g  && \
+    npm install pnpm@latest -g  && \
     apk update && apk upgrade && \
     apk add --no-cache \
         ca-certificates \
@@ -105,39 +114,47 @@ USER etherpad
 WORKDIR "${EP_DIR}"
 
 # etherpads version feature requires this. Only copy what is really needed
-COPY --chown=etherpad:etherpad ./.git/HEAD ./.git/HEAD
-COPY --chown=etherpad:etherpad ./.git/refs ./.git/refs
 COPY --chown=etherpad:etherpad ${SETTINGS} ./settings.json
 COPY --chown=etherpad:etherpad ./var ./var
 COPY --chown=etherpad:etherpad ./bin ./bin
 COPY --chown=etherpad:etherpad ./pnpm-workspace.yaml ./package.json ./
 
-FROM build as development
 
-COPY --chown=etherpad:etherpad ./src/package.json .npmrc ./src/
-COPY --chown=etherpad:etherpad --from=adminBuild /opt/etherpad-lite/admin/dist ./src/templates/admin
-COPY --chown=etherpad:etherpad --from=adminBuild /opt/etherpad-lite/ui/dist ./src/static/oidc
+
+FROM build AS build_git
+ONBUILD COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD
+ONBUILD COPY --chown=etherpad:etherpad ./.git/ref[s] ./.git/refs
+
+FROM build AS build_copy
+
+
+
+
+FROM build_${BUILD_ENV} AS development
+
+COPY --chown=etherpad:etherpad ./src/ ./src/
+COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/ templates/admin./src/templates/admin
+COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/oidc ./src/static/oidc
 
 RUN bin/installDeps.sh && \
-    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ]; then \
-        pnpm run install-plugins ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}}; \
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+        pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
     fi
 
 
-FROM build as production
+FROM build_${BUILD_ENV} AS production
 
 ENV NODE_ENV=production
 ENV ETHERPAD_PRODUCTION=true
 
 COPY --chown=etherpad:etherpad ./src ./src
-COPY --chown=etherpad:etherpad --from=adminBuild /opt/etherpad-lite/admin/dist ./src/templates/admin
-COPY --chown=etherpad:etherpad --from=adminBuild /opt/etherpad-lite/ui/dist ./src/static/oidc
+COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/templates/admin ./src/templates/admin
+COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/oidc ./src/static/oidc
 
 RUN bin/installDeps.sh && rm -rf ~/.npm && rm -rf ~/.local && rm -rf ~/.cache && \
-    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ]; then \
-        pnpm run install-plugins ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}}; \
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+      pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
     fi
-
 
 # Copy the configuration file.
 COPY --chown=etherpad:etherpad ${SETTINGS} "${EP_DIR}"/settings.json

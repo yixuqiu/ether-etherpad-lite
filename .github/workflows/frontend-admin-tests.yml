@@ -11,14 +11,13 @@ permissions:
 
 jobs:
   withplugins:
-    if: ${{ github.actor != 'dependabot[bot]' }}
     name: with plugins
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 21]
+        node: [20, 22]
 
     steps:
       -
@@ -34,7 +33,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
           version: 9.0.4
@@ -50,6 +49,13 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
+      - name: Cache playwright binaries
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
       - name: Only install direct dependencies
         run: pnpm config set auto-install-peers false
       #-
@@ -69,7 +75,7 @@ jobs:
       # rules.
       -
         name: Install all dependencies and symlink for ep_etherpad-lite
-        run: bin/installDeps.sh
+        run: pnpm i
       #-
       #  name: Install etherpad plugins
       #  run: rm -Rf node_modules/ep_align/static/tests/*
@@ -85,7 +91,7 @@ jobs:
         run: "sed -i 's/\"enableAdminUITests\": false/\"enableAdminUITests\": true,\\n\"users\":{\"admin\":{\"password\":\"changeme1\",\"is_admin\":true}}/' settings.json"
       -
         name: increase maxHttpBufferSize
-        run: "sed -i 's/\"maxHttpBufferSize\": 10000/\"maxHttpBufferSize\": 10000000/' settings.json"
+        run: "sed -i 's/\"maxHttpBufferSize\": 50000/\"maxHttpBufferSize\": 10000000/' settings.json"
       -
         name: Disable import/export rate limiting
         run: |
@@ -93,7 +99,6 @@ jobs:
       - name: Build admin frontend
         working-directory: admin
         run: |
-            pnpm install
             pnpm run build
       #  name: Run the frontend admin tests
       #  shell: bash
@@ -125,7 +130,7 @@ jobs:
       - name: Run the frontend admin tests
         shell: bash
         run: |
-          pnpm run dev &
+          pnpm run prod &
           connected=false
           can_connect() {
           curl -sSfo /dev/null http://localhost:9001/ || return 1
