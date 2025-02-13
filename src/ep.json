@@ -42,7 +42,8 @@
       "name": "specialpages",
       "hooks": {
         "expressCreateServer": "ep_etherpad-lite/node/hooks/express/specialpages",
-        "expressPreSession": "ep_etherpad-lite/node/hooks/express/specialpages"
+        "expressPreSession": "ep_etherpad-lite/node/hooks/express/specialpages",
+        "socketio": "ep_etherpad-lite/node/hooks/express/specialpages"
       }
     },
     {
@@ -55,6 +56,12 @@
       "name": "padurlsanitize",
       "hooks": {
         "expressCreateServer": "ep_etherpad-lite/node/hooks/express/padurlsanitize"
+      }
+    },
+    {
+      "name": "pwa",
+      "hooks": {
+        "expressCreateServer": "ep_etherpad-lite/node/hooks/express/pwa"
       }
     },
     {
@@ -73,6 +80,12 @@
       "name": "errorhandling",
       "hooks": {
         "expressCreateServer": "ep_etherpad-lite/node/hooks/express/errorhandling"
+      }
+    },
+    {
+      "name": "restApi",
+      "hooks": {
+        "expressCreateServer": "ep_etherpad-lite/node/handler/RestAPI"
       }
     },
     {
@@ -111,12 +124,6 @@
       "name": "openapi",
       "hooks": {
         "expressPreSession": "ep_etherpad-lite/node/hooks/express/openapi"
-      }
-    },
-    {
-      "name": "ep_message_all",
-      "client_hooks": {
-        "handleClientMessage_shoutMessage": "ep_etherpad-lite/static/js/messageHandler"
       }
     }
   ]

@@ -54,13 +54,14 @@ const nonSettings = [
 
 // This is a function to make it easy to create a new instance. It is important to not reuse a
 // config object after passing it to log4js.configure() because that method mutates the object. :(
-const defaultLogConfig = (level: string) => ({
-    appenders: {console: {type: 'console'}},
+const defaultLogConfig = (level: string, layoutType: string) => ({
+    appenders: {console: {type: 'console', layout: {type: layoutType}}},
     categories: {
         default: {appenders: ['console'], level},
     }
 });
 const defaultLogLevel = 'INFO';
+const defaultLogLayoutType = 'colored';
 
 const initLogging = (config: any) => {
     // log4js.configure() modifies exports.logconfig so check for equality first.
@@ -76,7 +77,7 @@ const initLogging = (config: any) => {
 
 // Initialize logging as early as possible with reasonable defaults. Logging will be re-initialized
 // with the user's chosen log level and logger config after the settings have been loaded.
-initLogging(defaultLogConfig(defaultLogLevel));
+initLogging(defaultLogConfig(defaultLogLevel, defaultLogLayoutType));
 
 /* Root path of the installation */
 exports.root = absolutePaths.findEtherpadRoot();
@@ -106,6 +107,7 @@ exports.ttl = {
     RefreshToken: 1 * 24 * 60 * 60, // 1 day in seconds
 }
 
+exports.updateServer = "https://static.etherpad.org"
 
 
 /*
@@ -153,17 +155,26 @@ exports.socketIo = {
      * properly, but increasing the value increases susceptibility to denial of service attacks
      * (malicious clients can exhaust memory).
      */
-    maxHttpBufferSize: 10000,
+    maxHttpBufferSize: 50000,
 };
+
+
+/*
+  The authentication method used by the server.
+  The default value is sso
+  If you want to use the old authentication system, change this to apikey
+ */
+exports.authenticationMethod = 'sso'
+
 
 /*
  * The Type of the database
  */
-exports.dbType = 'dirty';
+exports.dbType = 'rustydb';
 /**
  * This setting is passed with dbType to ueberDB to set up the database
  */
-exports.dbSettings = {filename: path.join(exports.root, 'var/dirty.db')};
+exports.dbSettings = {filename: path.join(exports.root, 'var/rusty.db')};
 
 /**
  * The default Text of a new pad
@@ -283,6 +294,11 @@ exports.allowUnknownFileEnds = true;
 exports.loglevel = defaultLogLevel;
 
 /**
+ * The log layout type of log4js
+ */
+exports.logLayoutType = defaultLogLayoutType;
+
+/**
  * Disable IP logging
  */
 exports.disableIPlogging = false;
@@ -363,6 +379,14 @@ exports.sso = {
  * Show settings in admin page, by default it is true
  */
 exports.showSettingsInAdminPage = true;
+
+/*
+ * Settings for cleanup of pads
+ */
+exports.cleanup = {
+  enabled: false,
+  keepRevisions: 100,
+}
 
 /*
  * By default, when caret is moved out of viewport, it scrolls the minimum
@@ -518,6 +542,8 @@ exports.getGitCommit = () => {
 
 // Return etherpad version from package.json
 exports.getEpVersion = () => require('../../package.json').version;
+
+
 
 /**
  * Receives a settingsObj and, if the property name is a valid configuration
@@ -745,7 +771,6 @@ const lookupEnvironmentVariables = (obj: MapArrayType<any>) => {
 
     //console.log(root.collectFromLeafsUpwards())
     const rooting = root.collectFromLeafsUpwards()
-    console.log("Rooting is", rooting.ADMIN)
     obj = Object.assign(obj, rooting)
     return obj;
 };
@@ -807,13 +832,23 @@ exports.reloadSettings = () => {
     storeSettings(credentials);
 
     // Init logging config
-    exports.logconfig = defaultLogConfig(exports.loglevel ? exports.loglevel : defaultLogLevel);
+    exports.logconfig = defaultLogConfig(
+        exports.loglevel ? exports.loglevel : defaultLogLevel,
+        exports.logLayoutType ? exports.logLayoutType : defaultLogLayoutType
+    );
+    logger.warn("loglevel: " + exports.loglevel);
+    logger.warn("logLayoutType: " + exports.logLayoutType);
     initLogging(exports.logconfig);
 
     if (!exports.skinName) {
         logger.warn('No "skinName" parameter found. Please check out settings.json.template and ' +
             'update your settings.json. Falling back to the default "colibris".');
         exports.skinName = 'colibris';
+    }
+
+    if (!exports.socketTransportProtocols.includes("websocket") || !exports.socketTransportProtocols.includes("polling")) {
+        logger.warn("Invalid socketTransportProtocols setting. Please check out settings.json.template and update your settings.json. Falling back to the default ['websocket', 'polling'].");
+        exports.socketTransportProtocols = ['websocket', 'polling'];
     }
 
     // checks if skinName has an acceptable value, otherwise falls back to "colibris"
@@ -914,6 +949,12 @@ exports.reloadSettings = () => {
         exports.dbSettings.filename = absolutePaths.makeAbsolute(exports.dbSettings.filename);
         logger.warn(`${dirtyWarning} File location: ${exports.dbSettings.filename}`);
     }
+
+    if (exports.dbType === 'rustydb' || exports.dbType === "sqlite") {
+      exports.dbSettings.filename = absolutePaths.makeAbsolute(exports.dbSettings.filename);
+      logger.warn(`File location: ${exports.dbSettings.filename}`);
+    }
+
 
     if (exports.ip === '') {
         // using Unix socket for connectivity

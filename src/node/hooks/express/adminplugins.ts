@@ -6,9 +6,11 @@ import {QueryType} from "../../types/QueryType";
 
 import {getAvailablePlugins, install, search, uninstall} from "../../../static/js/pluginfw/installer";
 import {PackageData} from "../../types/PackageInfo";
+import semver from 'semver';
+import log4js from 'log4js';
 
 const pluginDefs = require('../../../static/js/pluginfw/plugin_defs');
-import semver from 'semver';
+const logger = log4js.getLogger('adminPlugins');
 
 
 exports.socketio = (hookName:string, args:ArgsExpressType, cb:Function) => {
@@ -18,10 +20,28 @@ exports.socketio = (hookName:string, args:ArgsExpressType, cb:Function) => {
     const {session: {user: {is_admin: isAdmin} = {}} = {}} = socket.conn.request;
     if (!isAdmin) return;
 
-    socket.on('getInstalled', (query:string) => {
+    const checkPluginForUpdates = async () => {
+      const results = await getAvailablePlugins(/* maxCacheAge:*/ 60 * 10);
+      return Object.keys(pluginDefs.plugins).filter((plugin) => {
+        if (!results[plugin]) return false;
+
+        const latestVersion = results[plugin].version;
+        const currentVersion = pluginDefs.plugins[plugin].package.version;
+
+        return semver.gt(latestVersion, currentVersion);
+      })
+    }
+
+    socket.on('getInstalled', async (query: string) => {
       // send currently installed plugins
       const installed =
-          Object.keys(pluginDefs.plugins).map((plugin) => pluginDefs.plugins[plugin].package);
+        Object.keys(pluginDefs.plugins).map((plugin) => pluginDefs.plugins[plugin].package);
+
+      const updatable = await checkPluginForUpdates();
+
+      installed.forEach((plugin) => {
+        plugin.updatable = updatable.includes(plugin.name);
+      })
 
       socket.emit('results:installed', {installed});
     });
@@ -29,16 +49,7 @@ exports.socketio = (hookName:string, args:ArgsExpressType, cb:Function) => {
     socket.on('checkUpdates', async () => {
       // Check plugins for updates
       try {
-        const results = await getAvailablePlugins(/* maxCacheAge:*/ 60 * 10);
-
-        const updatable = Object.keys(pluginDefs.plugins).filter((plugin) => {
-          if (!results[plugin]) return false;
-
-          const latestVersion = results[plugin].version;
-          const currentVersion = pluginDefs.plugins[plugin].package.version;
-
-          return semver.gt(latestVersion, currentVersion);
-        });
+        const updatable = checkPluginForUpdates();
 
         socket.emit('results:updatable', {updatable});
       } catch (err) {
@@ -61,6 +72,7 @@ exports.socketio = (hookName:string, args:ArgsExpressType, cb:Function) => {
 
     socket.on('search', async (query: QueryType) => {
       try {
+        if (query.searchTerm) logger.info(`Plugin search: ${query.searchTerm}'`);
         const results = await search(query.searchTerm, /* maxCacheAge:*/ 60 * 10);
         let res = Object.keys(results)
             .map((pluginName) => results[pluginName])
@@ -68,10 +80,9 @@ exports.socketio = (hookName:string, args:ArgsExpressType, cb:Function) => {
         res = sortPluginList(res, query.sortBy, query.sortDir)
             .slice(query.offset, query.offset + query.limit);
         socket.emit('results:search', {results: res, query});
-      } catch (er) {
-        console.error(er);
-
-        socket.emit('results:search', {results: {}, query});
+      } catch (err: any) {
+        logger.error(`Error searching plugins: ${err}`);
+        socket.emit('results:searcherror', {error: err.message, query});
       }
     });
 

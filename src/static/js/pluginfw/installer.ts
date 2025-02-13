@@ -100,6 +100,10 @@ export const checkForMigration = async () => {
 
     for (let file of files){
       const moduleName = path.basename(file);
+      if (moduleName === '.versions') {
+        // Skip the directory using live-plugin-manager
+        continue;
+      }
       try {
         await fs.access(path.join(node_modules, moduleName), fs.constants.F_OK);
         logger.debug(`plugin ${moduleName} already exists in node_modules`);
@@ -167,7 +171,7 @@ export const getAvailablePlugins = (maxCacheAge: number|false) => {
       return resolve(availablePlugins);
     }
 
-    await axios.get('https://static.etherpad.org/plugins.json', {headers})
+    await axios.get(`${settings.updateServer}/plugins.json`, {headers})
         .then((pluginsLoaded:AxiosResponse<MapArrayType<PackageInfo>>) => {
           availablePlugins = pluginsLoaded.data;
           cacheTimestamp = nowTimestamp;

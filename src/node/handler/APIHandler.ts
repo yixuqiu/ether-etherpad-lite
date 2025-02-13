@@ -24,10 +24,10 @@ import {MapArrayType} from "../types/MapType";
 const api = require('../db/API');
 const padManager = require('../db/PadManager');
 import createHTTPError from 'http-errors';
-import {Http2ServerRequest, Http2ServerResponse} from "node:http2";
+import {Http2ServerRequest} from "node:http2";
 import {publicKeyExported} from "../security/OAuth2Provider";
 import {jwtVerify} from "jose";
-
+import {APIFields, apikey} from './APIKeyHandler'
 // a list of all functions
 const version:MapArrayType<any> = {};
 
@@ -141,6 +141,7 @@ version['1.3.0'] = {
   setText: ['padID', 'text', 'authorId'],
 };
 
+
 // set the latest available API version here
 exports.latestApiVersion = '1.3.0';
 
@@ -148,11 +149,6 @@ exports.latestApiVersion = '1.3.0';
 exports.version = version;
 
 
-type APIFields = {
-  api_key: string;
-  padID: string;
-  padName: string;
-}
 
 /**
  * Handles an HTTP API call
@@ -160,9 +156,9 @@ type APIFields = {
  * @param {String} functionName the name of the called function
  * @param fields the params of the called function
  * @param req express request object
- * @param res express response object
  */
-exports.handle = async function (apiVersion: string, functionName: string, fields: APIFields, req: Http2ServerRequest, res: Http2ServerResponse) {
+exports.handle = async function (apiVersion: string, functionName: string, fields: APIFields,
+                                 req: Http2ServerRequest) {
   // say goodbye if this is an unknown API version
   if (!(apiVersion in version)) {
     throw new createHTTPError.NotFound('no such api version');
@@ -173,19 +169,25 @@ exports.handle = async function (apiVersion: string, functionName: string, field
     throw new createHTTPError.NotFound('no such function');
   }
 
-  if(!req.headers.authorization) {
-    throw new createHTTPError.Unauthorized('no or wrong API Key');
+
+
+  if (apikey !== null && apikey.trim().length > 0) {
+    fields.apikey = fields.apikey || fields.api_key || fields.authorization;
+    // API key is configured, check if it is valid
+    if (fields.apikey !== apikey!.trim()) {
+      throw new createHTTPError.Unauthorized('no or wrong API Key');
+    }
+  } else {
+    if(!req.headers.authorization) {
+      throw new createHTTPError.Unauthorized('no or wrong API Key');
+    }
+    try {
+      await jwtVerify(req.headers.authorization!.replace("Bearer ", ""), publicKeyExported!, {algorithms: ['RS256'],
+        requiredClaims: ["admin"]})
+    } catch (e) {
+      throw new createHTTPError.Unauthorized('no or wrong OAuth token');
+    }
   }
-
-  try {
-    await jwtVerify(req.headers.authorization!.replace("Bearer ", ""), publicKeyExported!, {algorithms: ['RS256'],
-    requiredClaims: ["admin"]})
-
-  } catch (e) {
-    throw new createHTTPError.Unauthorized('no or wrong API Key');
-  }
-
-
 
   // sanitize any padIDs before continuing
   if (fields.padID) {

@@ -1,3 +1,83 @@
+# 2.2.7
+
+
+### Notable enhancements and fixes
+
+- We migrated all important pages to React 19 and React Router v7
+
+Besides that only dependency updates.
+
+
+ -> Have a merry Christmas and a happy new year.  🎄 🎁
+
+
+# 2.2.6
+
+### Notable enhancements and fixes
+
+- Added option to delete a pad by the creator. This option can be found in the settings menu. When you click on it you get a confirm dialog and after that you have the chance to completely erase the pad.
+
+
+# 2.2.5
+
+### Notable enhancements and fixes
+
+- Fixed timeslider not scrolling when the revision count is a multiple of 100
+- Added new Restful API for version 2 of Etherpad. It is available at /api-docs
+
+
+# 2.2.4
+
+### Notable enhancements and fixes
+
+- Switched to new SQLite backend
+- Fixed rusty-store-kv module not found
+
+
+# 2.2.3
+
+### Notable enhancements and fixes
+
+- Introduced a new in process database `rustydb` that represents a fast key value store written in Rust.
+- Readded window._ as a shortcut for getting text
+- Added support for migrating any ueberdb database to another. You can now switch as you please. See here: https://docs.etherpad.org/cli.html
+- Further Typescript movements
+- A lot of security issues fixed and reviewed in this release. Please update.
+
+
+# 2.2.2
+
+### Notable enhancements and fixes
+
+- Removal of Etherpad require kernel: We finally managed to include esbuild to bundle our frontend code together. So no matter how many plugins your server has it is always one JavaScript file. This boosts performance dramatically.
+- Added log layoutType: This lets you print the log in either colored or basic (black and white text)
+- Introduced esbuild for bundling CSS files
+- Cache all files to be bundled in memory for faster load speed
+
+
+# 2.1.1
+
+
+### Notable enhancements and fixes
+
+- Fixed failing Docker build when checked out as git submodule. Thanks to @neurolabs
+- Fixed: Fallback to websocket and polling when unknown(old) config is present for socket io
+- Fixed: Next page disabled if zero page by @samyakj023
+- On CTRL+CLICK bring the window back to focus by Helder Sepulveda
+
+# 2.1.0
+
+### Notable enhancements and fixes
+
+- Added PWA support. You can now add your Etherpad instance to your home screen on your mobile device or desktop.
+- Fixed live plugin manager versions clashing. Thanks to @yacchin1205
+- Fixed a bug in the pad panel where pagination was not working correctly when sorting by pad name
+
+### Compatibility changes
+
+- Reintroduced APIKey.txt support. You can now switch between APIKey and OAuth2.0 authentication. This can be toggled with the setting authenticationMethod. The default is OAuth2. If you want to use the APIKey method you can set that to `apikey`.
+
+
 # 2.0.3
 
 ### Notable enhancements and fixes
@@ -47,8 +127,8 @@
   - Bin folder: The bin folder has been moved from the src folder to the root folder. This change was necessary as the contained scripts do not represent core functionality of the user.
   - Starting Etherpad: Etherpad can now be started with a single command: `pnpm run prod` in the root directory.
   - Installing Etherpad: Etherpad no longer symlinks itself in the root directory. This is now also taken care by pnpm, and it just creates a node_modules folder with the src directory`s ep_etherpad-lite folder
-  - Plugins can now be installed simply via the command: `pnpm run install-plugins first-plugin second-plugin` or if you want to install from path you can do:
-  `pnpm run install-plugins --path ../path-to-plugin`
+  - Plugins can now be installed simply via the command: `pnpm run plugins i first-plugin second-plugin` or if you want to install from path you can do:
+  `pnpm run plugins i --path ../path-to-plugin`
 
 
 # 1.9.7
